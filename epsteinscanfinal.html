@@ -1,0 +1,2460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EPSTEINSCAN - The Ultimate Files Aggregator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #FF0040;
+            --secondary: #FFD700;
+            --dark: #09090b;
+            --darker: #030305;
+            --card-bg: #0f0f12;
+            --card-border: #1a1a1f;
+            --text: #fafafa;
+            --text-dim: #71717a;
+            --text-muted: #52525b;
+            --glow: rgba(255, 0, 64, 0.4);
+            --gold-glow: rgba(255, 215, 0, 0.4);
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--dark);
+            color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
+            line-height: 1.6;
+        }
+
+        /* Subtle scan lines */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.03) 0px,
+                rgba(0, 0, 0, 0.03) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 10000;
+        }
+
+        /* Header */
+        .header {
+            background: var(--darker);
+            border-bottom: 1px solid var(--card-border);
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-text h1 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.5px;
+        }
+
+        .logo-text h1 span {
+            color: var(--primary);
+        }
+
+        .logo-text p {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-weight: 500;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+
+        .header-ca {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 10px 14px;
+            border-radius: 8px;
+        }
+
+        .ca-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-dim);
+        }
+
+        .ca-address {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--secondary);
+            font-weight: 500;
+        }
+
+        .ca-copy {
+            background: transparent;
+            border: none;
+            color: var(--text-dim);
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 4px;
+            transition: all 0.2s;
+        }
+
+        .ca-copy:hover {
+            color: var(--secondary);
+            background: rgba(255, 215, 0, 0.1);
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 32px;
+        }
+
+        .header-stat {
+            text-align: right;
+        }
+
+        .header-stat .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .header-stat .label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+        }
+
+        /* Live Ticker */
+        .live-ticker {
+            background: var(--darker);
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            height: 36px;
+        }
+
+        .ticker-label {
+            background: var(--primary);
+            color: #fff;
+            padding: 0 16px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            background: #fff;
+            border-radius: 50%;
+            animation: live-pulse 1s infinite;
+        }
+
+        @keyframes live-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .ticker-track {
+            flex: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .ticker-content {
+            display: flex;
+            gap: 50px;
+            animation: ticker-scroll 60s linear infinite;
+            white-space: nowrap;
+            padding-left: 100%;
+        }
+
+        @keyframes ticker-scroll {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(-50%); }
+        }
+
+        .ticker-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-dim);
+            flex-shrink: 0;
+        }
+
+        .ticker-item .file-icon {
+            color: var(--secondary);
+        }
+
+        .ticker-item .file-name {
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+        }
+
+        .ticker-item .file-action {
+            color: var(--primary);
+            font-weight: 500;
+        }
+
+        .ticker-item .file-time {
+            color: var(--text-muted);
+            font-size: 10px;
+        }
+
+        /* Navigation */
+        .nav-tabs {
+            background: var(--darker);
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .nav-tab {
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--text-dim);
+            padding: 10px 20px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            border-radius: 6px;
+        }
+
+        .nav-tab:hover {
+            background: var(--card-bg);
+            color: var(--text);
+        }
+
+        .nav-tab.active {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        /* Tab Content */
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Section Headers */
+        .section-header {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .section-header h2 {
+            font-size: 28px;
+            font-weight: 800;
+            color: var(--text);
+            margin-bottom: 8px;
+            letter-spacing: -0.5px;
+        }
+
+        .section-header h2 span {
+            color: var(--primary);
+        }
+
+        .section-header p {
+            color: var(--text-dim);
+            font-size: 14px;
+            font-weight: 400;
+        }
+
+        /* ==================== ISLAND MAP TAB ==================== */
+        .island-section {
+            padding: 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .map-container {
+            display: grid;
+            grid-template-columns: 1fr 340px;
+            gap: 24px;
+        }
+
+        @media (max-width: 1000px) {
+            .map-container {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .leaflet-map {
+            width: 100%;
+            height: 600px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+        }
+
+        /* Custom Leaflet Markers */
+        .custom-marker {
+            background: var(--primary);
+            border: 3px solid #fff;
+            border-radius: 50%;
+            width: 32px !important;
+            height: 32px !important;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .custom-marker:hover {
+            transform: scale(1.2);
+        }
+
+        .custom-marker.temple { background: #FFD700; }
+        .custom-marker.mansion { background: #DC2626; }
+        .custom-marker.sundial { background: #3B82F6; }
+        .custom-marker.pool { background: #06B6D4; }
+        .custom-marker.guest { background: #8B5CF6; }
+        .custom-marker.helipad { background: #F97316; }
+        .custom-marker.dock { background: #10B981; }
+
+        /* Leaflet popup styling */
+        .leaflet-popup-content-wrapper {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 8px;
+            color: var(--text);
+        }
+
+        .leaflet-popup-tip {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+        }
+
+        .leaflet-popup-content {
+            margin: 12px 14px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .popup-title {
+            font-weight: 700;
+            font-size: 14px;
+            margin-bottom: 6px;
+            color: var(--secondary);
+        }
+
+        .popup-desc {
+            font-size: 12px;
+            color: var(--text-dim);
+            line-height: 1.5;
+        }
+
+        /* Info Panel */
+        .info-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .info-panel-header {
+            background: var(--darker);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .info-panel-header h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-panel-body {
+            padding: 20px;
+        }
+
+        .location-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .location-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+            padding: 12px;
+            background: var(--darker);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: 1px solid transparent;
+        }
+
+        .location-item:hover {
+            border-color: var(--primary);
+        }
+
+        .location-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .location-icon.temple { background: rgba(255, 215, 0, 0.2); }
+        .location-icon.mansion { background: rgba(220, 38, 38, 0.2); }
+        .location-icon.sundial { background: rgba(59, 130, 246, 0.2); }
+        .location-icon.pool { background: rgba(6, 182, 212, 0.2); }
+        .location-icon.guest { background: rgba(139, 92, 246, 0.2); }
+        .location-icon.helipad { background: rgba(249, 115, 22, 0.2); }
+        .location-icon.dock { background: rgba(16, 185, 129, 0.2); }
+
+        .location-text h4 {
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .location-text p {
+            font-size: 11px;
+            color: var(--text-dim);
+            line-height: 1.4;
+        }
+
+        .map-legend {
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .map-legend h4 {
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            letter-spacing: 0.5px;
+        }
+
+        .legend-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 11px;
+            color: var(--text-dim);
+        }
+
+        .legend-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+
+        /* ==================== FLIGHT MAP TAB ==================== */
+        .flight-section {
+            padding: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .flight-map-container {
+            width: 100%;
+            height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            margin-bottom: 32px;
+        }
+
+        .flight-log-panel {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .flight-log-header {
+            background: var(--darker);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .flight-log-header h3 {
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        .flight-log-header a {
+            font-size: 12px;
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        .flight-log-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .flight-log-table th,
+        .flight-log-table td {
+            padding: 14px 20px;
+            text-align: left;
+            border-bottom: 1px solid var(--card-border);
+            font-size: 13px;
+        }
+
+        .flight-log-table th {
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            background: var(--darker);
+        }
+
+        .flight-log-table tr:hover td {
+            background: rgba(255, 0, 64, 0.05);
+        }
+
+        .flight-log-table .route {
+            color: var(--primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 500;
+        }
+
+        .flight-log-table .aircraft {
+            color: var(--text-dim);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+        }
+
+        /* ==================== NAME FREQUENCY TAB ==================== */
+        .frequency-section {
+            padding: 32px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .frequency-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .frequency-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .freq-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .freq-card-header {
+            background: var(--darker);
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .freq-card-header h3 {
+            font-size: 14px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .freq-card-body {
+            padding: 20px;
+        }
+
+        .heat-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 3px;
+        }
+
+        .heat-cell {
+            aspect-ratio: 1;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: transform 0.15s;
+            position: relative;
+        }
+
+        .heat-cell:hover {
+            transform: scale(1.3);
+            z-index: 10;
+        }
+
+        .heat-cell::after {
+            content: attr(data-name);
+            position: absolute;
+            bottom: calc(100% + 5px);
+            left: 50%;
+            transform: translateX(-50%);
+            background: var(--darker);
+            padding: 6px 10px;
+            font-size: 10px;
+            white-space: nowrap;
+            border-radius: 4px;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s;
+            border: 1px solid var(--card-border);
+            font-weight: 500;
+        }
+
+        .heat-cell:hover::after {
+            opacity: 1;
+        }
+
+        .leaderboard-list {
+            display: flex;
+            flex-direction: column;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .leaderboard-list::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .leaderboard-list::-webkit-scrollbar-track {
+            background: var(--darker);
+        }
+
+        .leaderboard-list::-webkit-scrollbar-thumb {
+            background: var(--card-border);
+            border-radius: 3px;
+        }
+
+        .leaderboard-item {
+            display: flex;
+            align-items: center;
+            padding: 14px 0;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .leaderboard-item:last-child {
+            border-bottom: none;
+        }
+
+        .lb-rank {
+            width: 28px;
+            height: 28px;
+            background: var(--card-border);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 700;
+            margin-right: 14px;
+        }
+
+        .lb-rank.gold { background: linear-gradient(135deg, #FFD700, #B8860B); color: #000; }
+        .lb-rank.silver { background: linear-gradient(135deg, #C0C0C0, #808080); color: #000; }
+        .lb-rank.bronze { background: linear-gradient(135deg, #CD7F32, #8B4513); color: #fff; }
+
+        .lb-name {
+            flex: 1;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .lb-bar {
+            width: 120px;
+            height: 6px;
+            background: var(--card-border);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-right: 14px;
+        }
+
+        .lb-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), var(--secondary));
+            border-radius: 3px;
+        }
+
+        .lb-count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: var(--secondary);
+            font-weight: 600;
+            min-width: 60px;
+            text-align: right;
+        }
+
+        .freq-disclaimer {
+            text-align: center;
+            padding: 16px;
+            background: rgba(255, 215, 0, 0.1);
+            border-radius: 8px;
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--text-dim);
+        }
+
+        /* ==================== DOCUMENTS TAB ==================== */
+        .documents-section {
+            padding: 32px;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .search-bar {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 32px;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .search-bar input {
+            flex: 1;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            padding: 14px 18px;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            border-radius: 8px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .search-bar input:focus {
+            border-color: var(--primary);
+        }
+
+        .search-bar input::placeholder {
+            color: var(--text-muted);
+        }
+
+        .search-bar button {
+            background: var(--primary);
+            border: none;
+            padding: 14px 24px;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+
+        .search-bar button:hover {
+            filter: brightness(1.1);
+        }
+
+        .roulette-btn {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto 40px;
+            padding: 16px 32px;
+            background: linear-gradient(135deg, #DC2626, #B91C1C);
+            border: none;
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .roulette-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(220, 38, 38, 0.3);
+        }
+
+        .roulette-btn.spinning {
+            animation: shake 0.1s infinite;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px); }
+            75% { transform: translateX(3px); }
+        }
+
+        .doc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        .doc-card {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+
+        .doc-card:hover {
+            border-color: var(--primary);
+            transform: translateY(-4px);
+        }
+
+        .doc-card.featured {
+            border-color: var(--secondary);
+        }
+
+        .doc-card.featured:hover {
+            border-color: var(--primary);
+            box-shadow: 0 10px 30px rgba(255, 215, 0, 0.1);
+        }
+
+        .doc-card-header {
+            background: var(--darker);
+            padding: 20px;
+            border-bottom: 1px solid var(--card-border);
+        }
+
+        .doc-card-header h3 {
+            font-size: 16px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .doc-card-header p {
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .doc-card-body {
+            padding: 20px;
+        }
+
+        .doc-card-body > p {
+            font-size: 13px;
+            color: var(--text-dim);
+            margin-bottom: 16px;
+            line-height: 1.6;
+        }
+
+        .doc-stats {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .doc-stat {
+            background: var(--darker);
+            padding: 10px 14px;
+            border-radius: 6px;
+        }
+
+        .doc-stat .value {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--secondary);
+        }
+
+        .doc-stat .label {
+            font-size: 10px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+        }
+
+        .doc-card-btn {
+            display: block;
+            text-align: center;
+            padding: 12px;
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            transition: all 0.2s;
+        }
+
+        .doc-card-btn:hover {
+            background: var(--primary);
+            color: #fff;
+        }
+
+        .doc-section-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+            margin: 32px 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .doc-section-title .doc-count {
+            font-size: 12px;
+            font-weight: 400;
+            color: var(--text-muted);
+        }
+
+        .doc-filters {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .doc-filters select {
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text);
+            padding: 10px 14px;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            cursor: pointer;
+        }
+
+        .doc-filters select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .doc-browser {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 600px;
+            overflow-y: auto;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 12px;
+            padding: 12px;
+        }
+
+        .doc-browser::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .doc-browser::-webkit-scrollbar-track {
+            background: var(--darker);
+        }
+
+        .doc-browser::-webkit-scrollbar-thumb {
+            background: var(--card-border);
+            border-radius: 4px;
+        }
+
+        .doc-row {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            background: var(--darker);
+            border-radius: 8px;
+            transition: all 0.15s;
+            cursor: pointer;
+        }
+
+        .doc-row:hover {
+            background: rgba(255, 0, 64, 0.1);
+        }
+
+        .doc-row-icon {
+            font-size: 20px;
+            width: 36px;
+            text-align: center;
+        }
+
+        .doc-row-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .doc-row-title {
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .doc-row-meta {
+            font-size: 11px;
+            color: var(--text-muted);
+            display: flex;
+            gap: 12px;
+            margin-top: 2px;
+        }
+
+        .doc-row-badge {
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .doc-row-badge.unredacted {
+            background: rgba(16, 185, 129, 0.2);
+            color: #10B981;
+        }
+
+        .doc-row-badge.partial {
+            background: rgba(245, 158, 11, 0.2);
+            color: #F59E0B;
+        }
+
+        .doc-row-badge.heavy {
+            background: rgba(239, 68, 68, 0.2);
+            color: #EF4444;
+        }
+
+        .doc-row-size {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-dim);
+            white-space: nowrap;
+        }
+
+        .load-more-btn {
+            display: block;
+            width: 100%;
+            padding: 14px;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 8px;
+            margin-top: 16px;
+            transition: all 0.2s;
+        }
+
+        .load-more-btn:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        /* ==================== CORK BOARD TAB ==================== */
+        .cork-section {
+            padding: 20px;
+        }
+
+        .cork-board {
+            background: 
+                url("data:image/svg+xml,%3Csvg viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E"),
+                linear-gradient(135deg, #92702a 0%, #7a5d23 50%, #92702a 100%);
+            background-blend-mode: overlay;
+            min-height: 900px;
+            padding: 40px;
+            position: relative;
+            border-radius: 12px;
+            border: 12px solid #4a3520;
+            overflow: hidden;
+        }
+
+        .cork-title {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+
+        .cork-title h2 {
+            font-size: 32px;
+            font-weight: 800;
+            color: #DC2626;
+            text-shadow: 2px 2px 0 #000;
+            letter-spacing: -0.5px;
+        }
+
+        .cork-controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.85);
+            padding: 12px;
+            border-radius: 8px;
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .cork-controls button {
+            padding: 8px 14px;
+            background: var(--card-border);
+            border: none;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .cork-controls button:hover {
+            background: var(--primary);
+        }
+
+        .cork-controls button.active {
+            background: var(--primary);
+        }
+
+        .string-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 5;
+            pointer-events: none;
+        }
+
+        .string-canvas.drawing {
+            pointer-events: auto;
+            cursor: crosshair;
+        }
+
+        .board-item {
+            position: absolute;
+            cursor: grab;
+            z-index: 10;
+            transition: transform 0.1s, box-shadow 0.15s;
+        }
+
+        .board-item:hover {
+            z-index: 100;
+            transform: scale(1.03) rotate(0deg) !important;
+        }
+
+        .board-item.dragging {
+            cursor: grabbing;
+            z-index: 1000;
+        }
+
+        .sticky-note {
+            width: 200px;
+            padding: 16px;
+            background: #fef08a;
+            box-shadow: 4px 4px 12px rgba(0,0,0,0.3);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #1f2937;
+            position: relative;
+        }
+
+        .sticky-note::before {
+            content: '';
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            background: radial-gradient(circle at 30% 30%, #ef4444 0%, #b91c1c 100%);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .sticky-note.pink { background: #fecdd3; }
+        .sticky-note.green { background: #bbf7d0; }
+        .sticky-note.blue { background: #bfdbfe; }
+        .sticky-note.purple { background: #ddd6fe; }
+
+        .sticky-note strong {
+            font-weight: 700;
+            color: #dc2626;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--darker);
+            padding: 40px;
+            text-align: center;
+            border-top: 1px solid var(--card-border);
+        }
+
+        .footer-meme {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 20px;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 16px;
+        }
+
+        footer p {
+            color: var(--text-dim);
+            font-size: 13px;
+            margin-bottom: 8px;
+        }
+
+        footer .disclaimer {
+            max-width: 600px;
+            margin: 16px auto 0;
+            font-size: 11px;
+            line-height: 1.6;
+            color: var(--text-muted);
+        }
+
+        /* Pepe */
+        .pepe-corner {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 500;
+        }
+
+        .pepe {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #4ade80 0%, #22c55e 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            cursor: pointer;
+            animation: bob 2s ease-in-out infinite;
+            border: 2px solid var(--secondary);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+
+        @keyframes bob {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-8px); }
+        }
+
+        .pepe-speech {
+            position: absolute;
+            bottom: calc(100% + 10px);
+            right: 0;
+            background: #fff;
+            color: #1f2937;
+            padding: 12px 16px;
+            border-radius: 12px;
+            font-size: 12px;
+            width: 220px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+            display: none;
+            line-height: 1.5;
+        }
+
+        .pepe-speech::after {
+            content: '';
+            position: absolute;
+            bottom: -8px;
+            right: 20px;
+            border: 8px solid transparent;
+            border-top-color: #fff;
+        }
+
+        .pepe:hover .pepe-speech {
+            display: block;
+            animation: pop 0.2s ease-out;
+        }
+
+        @keyframes pop {
+            0% { transform: scale(0.8); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Achievement */
+        .achievement {
+            position: fixed;
+            top: -80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #FFD700, #F59E0B);
+            padding: 14px 24px;
+            border-radius: 8px;
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            transition: top 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+
+        .achievement.show {
+            top: 90px;
+        }
+
+        .achievement-icon {
+            font-size: 28px;
+        }
+
+        .achievement-text h4 {
+            font-size: 10px;
+            font-weight: 700;
+            color: #78350f;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .achievement-text p {
+            font-size: 14px;
+            font-weight: 700;
+            color: #1f2937;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header {
+                flex-direction: column;
+                gap: 16px;
+                padding: 16px;
+            }
+
+            .header-ca {
+                padding: 8px 12px;
+            }
+
+            .header-stats {
+                gap: 20px;
+            }
+
+            .nav-tabs {
+                flex-wrap: wrap;
+            }
+
+            .nav-tab {
+                padding: 8px 14px;
+                font-size: 11px;
+            }
+
+            .section-header h2 {
+                font-size: 22px;
+            }
+
+            .cork-board {
+                padding: 20px;
+            }
+
+            .board-item {
+                position: relative !important;
+                margin: 12px auto;
+                transform: none !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo">
+            <div class="logo-text">
+                <h1>EPSTEIN<span>SCAN</span></h1>
+                <p>Document Intelligence Platform</p>
+            </div>
+        </div>
+        <div class="header-ca">
+            <span class="ca-label">CA :</span>
+            <span class="ca-address" id="caAddress">TBA</span>
+            <button class="ca-copy" onclick="copyCA()" title="Copy Contract Address">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+            </button>
+        </div>
+        <div class="header-stats">
+            <div class="header-stat">
+                <div class="value">3M+</div>
+                <div class="label">Pages</div>
+            </div>
+            <div class="header-stat">
+                <div class="value">2K+</div>
+                <div class="label">Videos</div>
+            </div>
+            <div class="header-stat">
+                <div class="value" id="daysSince">0</div>
+                <div class="label">Days Since</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Live File Ticker -->
+    <div class="live-ticker">
+        <div class="ticker-label">
+            <span class="live-dot"></span>
+            LIVE UPDATES
+        </div>
+        <div class="ticker-track">
+            <div class="ticker-content" id="tickerContent"></div>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <nav class="nav-tabs">
+        <button class="nav-tab active" data-tab="island">🏝️ The Island</button>
+        <button class="nav-tab" data-tab="flights">✈️ Flight Tracker</button>
+        <button class="nav-tab" data-tab="names">📊 Name Frequency</button>
+        <button class="nav-tab" data-tab="documents">📁 Documents</button>
+        <button class="nav-tab" data-tab="board">📌 The Board</button>
+    </nav>
+
+    <!-- ==================== ISLAND TAB ==================== -->
+    <div class="tab-content active" id="tab-island">
+        <section class="island-section">
+            <div class="section-header">
+                <h2>Little St. James <span>Island</span></h2>
+                <p>Click markers to explore documented structures. Satellite imagery from ESRI.</p>
+            </div>
+
+            <div class="map-container">
+                <div id="islandMap" class="leaflet-map"></div>
+                
+                <div class="info-panel">
+                    <div class="info-panel-header">
+                        <h3>📍 Key Locations</h3>
+                    </div>
+                    <div class="info-panel-body">
+                        <div class="location-list">
+                            <div class="location-item" data-loc="temple">
+                                <div class="location-icon temple">🛕</div>
+                                <div class="location-text">
+                                    <h4>The Temple</h4>
+                                    <p>Blue & white striped structure with gold dome on highest point</p>
+                                </div>
+                            </div>
+                            <div class="location-item" data-loc="mansion">
+                                <div class="location-icon mansion">🏛️</div>
+                                <div class="location-text">
+                                    <h4>Main Residence</h4>
+                                    <p>Primary building with multiple floors and guest quarters</p>
+                                </div>
+                            </div>
+                            <div class="location-item" data-loc="pool">
+                                <div class="location-icon pool">🏊</div>
+                                <div class="location-text">
+                                    <h4>Pool Complex</h4>
+                                    <p>Swimming pool with surrounding lounge area</p>
+                                </div>
+                            </div>
+                            <div class="location-item" data-loc="helipad">
+                                <div class="location-icon helipad">🚁</div>
+                                <div class="location-text">
+                                    <h4>Helipad</h4>
+                                    <p>Private helipad for arrivals and departures</p>
+                                </div>
+                            </div>
+                            <div class="location-item" data-loc="dock">
+                                <div class="location-icon dock">⚓</div>
+                                <div class="location-text">
+                                    <h4>Boat Dock</h4>
+                                    <p>Main dock for boat arrivals from St. Thomas</p>
+                                </div>
+                            </div>
+                            <div class="location-item" data-loc="guest">
+                                <div class="location-icon guest">🏠</div>
+                                <div class="location-text">
+                                    <h4>Guest Villas</h4>
+                                    <p>Multiple smaller structures for guests and staff</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="map-legend">
+                            <h4>Map Controls</h4>
+                            <p style="font-size: 11px; color: var(--text-muted);">
+                                Scroll to zoom • Drag to pan • Click markers for info
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== FLIGHTS TAB ==================== -->
+    <div class="tab-content" id="tab-flights">
+        <section class="flight-section">
+            <div class="section-header">
+                <h2>Lolita Express <span>Flight Tracker</span></h2>
+                <p>Documented flight routes from public FAA records and released flight logs</p>
+            </div>
+
+            <div id="flightMap" class="flight-map-container"></div>
+
+            <div class="flight-log-panel">
+                <div class="flight-log-header">
+                    <h3>📋 Sample Flight Log Entries</h3>
+                    <a href="https://www.justice.gov/epstein" target="_blank">View full logs at DOJ →</a>
+                </div>
+                <table class="flight-log-table">
+                    <thead>
+                        <tr>
+                            <th>Period</th>
+                            <th>Route</th>
+                            <th>Aircraft</th>
+                            <th>Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1997-2005</td>
+                            <td class="route">TEB → STT</td>
+                            <td class="aircraft">N908JE (727)</td>
+                            <td>Teterboro to St. Thomas</td>
+                        </tr>
+                        <tr>
+                            <td>Various</td>
+                            <td class="route">PBI → STT</td>
+                            <td class="aircraft">Various</td>
+                            <td>Palm Beach routes</td>
+                        </tr>
+                        <tr>
+                            <td>Various</td>
+                            <td class="route">TEB → SAF</td>
+                            <td class="aircraft">N908JE</td>
+                            <td>New Mexico ranch trips</td>
+                        </tr>
+                        <tr>
+                            <td>Various</td>
+                            <td class="route">JFK → CDG</td>
+                            <td class="aircraft">Various</td>
+                            <td>International (Paris)</td>
+                        </tr>
+                        <tr>
+                            <td>Various</td>
+                            <td class="route">TEB → CMH</td>
+                            <td class="aircraft">Various</td>
+                            <td>Ohio/Wexner connection</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== NAME FREQUENCY TAB ==================== -->
+    <div class="tab-content" id="tab-names">
+        <section class="frequency-section">
+            <div class="section-header">
+                <h2>Name <span>Frequency Analysis</span></h2>
+                <p>Most frequently mentioned names in released documents (illustrative data)</p>
+            </div>
+
+            <div class="frequency-grid">
+                <div class="freq-card">
+                    <div class="freq-card-header">
+                        <h3>🔥 Mention Heat Map</h3>
+                    </div>
+                    <div class="freq-card-body">
+                        <p style="font-size: 11px; color: var(--text-dim); margin-bottom: 16px;">
+                            Each cell represents relative mention frequency. Hover for details.
+                        </p>
+                        <div class="heat-grid" id="heatGrid"></div>
+                    </div>
+                </div>
+
+                <div class="freq-card">
+                    <div class="freq-card-header">
+                        <h3>🏆 Top Mentioned</h3>
+                    </div>
+                    <div class="freq-card-body">
+                        <div class="leaderboard-list" id="leaderboard"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="freq-disclaimer">
+                ⚠️ Frequency of mentions does not imply guilt or wrongdoing. Many mentioned individuals are victims, witnesses, or law enforcement.
+            </div>
+        </section>
+    </div>
+
+    <!-- ==================== DOCUMENTS TAB ==================== -->
+    <div class="tab-content" id="tab-documents">
+        <section class="documents-section">
+            <div class="section-header">
+                <h2>Official <span>Document Sources</span></h2>
+                <p>All links direct to official U.S. Government repositories</p>
+            </div>
+
+            <button class="roulette-btn" id="rouletteBtn" onclick="spinRoulette()">
+                <span>🎲</span> Random Document <span>🎲</span>
+            </button>
+
+            <div class="search-bar">
+                <input type="text" id="searchInput" placeholder="Search DOJ Epstein Library...">
+                <button onclick="searchDOJ()">Search</button>
+            </div>
+
+            <!-- Main Sources -->
+            <h3 class="doc-section-title">📂 Primary Sources</h3>
+            <div class="doc-grid" id="primarySources">
+                <div class="doc-card featured">
+                    <div class="doc-card-header">
+                        <h3>📜 Court Records</h3>
+                        <p>Criminal & Civil Cases</p>
+                    </div>
+                    <div class="doc-card-body">
+                        <p>Official court documents from SDNY criminal case and various civil lawsuits including depositions and judicial rulings.</p>
+                        <div class="doc-stats">
+                            <div class="doc-stat">
+                                <div class="value">500K+</div>
+                                <div class="label">Pages</div>
+                            </div>
+                        </div>
+                        <a href="https://www.justice.gov/epstein/court-records" target="_blank" class="doc-card-btn">Access Records</a>
+                    </div>
+                </div>
+
+                <div class="doc-card featured">
+                    <div class="doc-card-header">
+                        <h3>🔓 DOJ Disclosures</h3>
+                        <p>Transparency Act Release</p>
+                    </div>
+                    <div class="doc-card-body">
+                        <p>Documents released under the Epstein Files Transparency Act. The primary dump containing millions of pages.</p>
+                        <div class="doc-stats">
+                            <div class="doc-stat">
+                                <div class="value">3M+</div>
+                                <div class="label">Pages</div>
+                            </div>
+                            <div class="doc-stat">
+                                <div class="value">2K+</div>
+                                <div class="label">Videos</div>
+                            </div>
+                        </div>
+                        <a href="https://www.justice.gov/epstein/doj-disclosures" target="_blank" class="doc-card-btn">Access Disclosures</a>
+                    </div>
+                </div>
+
+                <div class="doc-card featured">
+                    <div class="doc-card-header">
+                        <h3>📋 FOIA Records</h3>
+                        <p>Freedom of Information</p>
+                    </div>
+                    <div class="doc-card-body">
+                        <p>Documents obtained through FOIA requests with redactions per 5 U.S.C. § 552 and Florida public records laws.</p>
+                        <div class="doc-stats">
+                            <div class="doc-stat">
+                                <div class="value">100K+</div>
+                                <div class="label">Pages</div>
+                            </div>
+                        </div>
+                        <a href="https://www.justice.gov/epstein/foia" target="_blank" class="doc-card-btn">Access FOIA</a>
+                    </div>
+                </div>
+
+                <div class="doc-card featured">
+                    <div class="doc-card-header">
+                        <h3>🏛️ FBI Vault</h3>
+                        <p>Bureau Investigation Files</p>
+                    </div>
+                    <div class="doc-card-body">
+                        <p>Original FBI investigation documents released through the Bureau's electronic reading room in 8 parts.</p>
+                        <div class="doc-stats">
+                            <div class="doc-stat">
+                                <div class="value">8</div>
+                                <div class="label">Parts</div>
+                            </div>
+                        </div>
+                        <a href="https://vault.fbi.gov/jeffrey-epstein" target="_blank" class="doc-card-btn">Access FBI Vault</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Released Documents Browser -->
+            <h3 class="doc-section-title">📄 Released Documents <span class="doc-count">Showing 100 of 3,241,502 documents</span></h3>
+            <div class="doc-filters">
+                <select id="docTypeFilter">
+                    <option value="all">All Types</option>
+                    <option value="deposition">Depositions</option>
+                    <option value="fbi">FBI Reports</option>
+                    <option value="flight">Flight Logs</option>
+                    <option value="financial">Financial Records</option>
+                    <option value="communication">Communications</option>
+                    <option value="photo">Photographs</option>
+                    <option value="court">Court Filings</option>
+                </select>
+                <select id="yearFilter">
+                    <option value="all">All Years</option>
+                    <option value="2024">2024-2026</option>
+                    <option value="2019">2019-2023</option>
+                    <option value="2008">2008-2018</option>
+                    <option value="2000">2000-2007</option>
+                    <option value="1990">Pre-2000</option>
+                </select>
+                <select id="statusFilter">
+                    <option value="all">All Status</option>
+                    <option value="unredacted">Unredacted</option>
+                    <option value="partial">Partially Redacted</option>
+                    <option value="heavy">Heavily Redacted</option>
+                </select>
+            </div>
+            <div class="doc-browser" id="docBrowser"></div>
+            <button class="load-more-btn" onclick="loadMoreDocs()">Load More Documents</button>
+        </section>
+    </div>
+
+    <!-- ==================== CORK BOARD TAB ==================== -->
+    <div class="tab-content" id="tab-board">
+        <section class="cork-section">
+            <div class="cork-board" id="corkBoard">
+                <canvas class="string-canvas" id="stringCanvas"></canvas>
+                
+                <div class="cork-controls">
+                    <button id="drawBtn" onclick="toggleDraw()">🧵 Draw Strings</button>
+                    <button onclick="clearStrings()">🗑️ Clear</button>
+                </div>
+
+                <div class="cork-title">
+                    <h2>FOLLOW THE MONEY</h2>
+                </div>
+
+                <!-- Row 1 -->
+                <div class="board-item sticky-note" style="left: 60px; top: 160px; transform: rotate(-4deg);">
+                    <strong>THE DEATH:</strong><br><br>
+                    • Cameras "malfunctioned"<br>
+                    • Guards "asleep" 8 hours<br>
+                    • Cell mate moved day before<br>
+                    • Broken hyoid bone 🤔
+                </div>
+
+                <div class="board-item sticky-note pink" style="left: 300px; top: 140px; transform: rotate(3deg);">
+                    <strong>2008 DEAL:</strong><br><br>
+                    • 13 months jail<br>
+                    • Could leave 6 days/week<br>
+                    • Victims not notified<br>
+                    • Federal charges dropped
+                </div>
+
+                <div class="board-item sticky-note green" style="left: 540px; top: 155px; transform: rotate(-2deg);">
+                    <strong>THE ISLAND:</strong><br><br>
+                    • 70 acres, USVI<br>
+                    • Temple with lock OUTSIDE<br>
+                    • Underground tunnels?<br>
+                    • Destroyed evidence
+                </div>
+
+                <div class="board-item sticky-note blue" style="left: 780px; top: 145px; transform: rotate(4deg);">
+                    <strong>FLIGHT LOGS:</strong><br><br>
+                    • 727 "Lolita Express"<br>
+                    • 600+ logged flights<br>
+                    • Many names redacted<br>
+                    • Missing log books
+                </div>
+
+                <div class="board-item sticky-note" style="left: 1020px; top: 170px; transform: rotate(-3deg);">
+                    <strong>ACOSTA QUOTE:</strong><br><br>
+                    "I was told Epstein belonged to intelligence and to leave it alone."<br>
+                    - 2019 🤯
+                </div>
+
+                <!-- Row 2 -->
+                <div class="board-item sticky-note purple" style="left: 80px; top: 380px; transform: rotate(2deg);">
+                    <strong>FINANCES:</strong><br><br>
+                    • Net worth $500M+<br>
+                    • Source: ???<br>
+                    • Wexner connection<br>
+                    • Deutsche Bank ties
+                </div>
+
+                <div class="board-item sticky-note" style="left: 320px; top: 400px; transform: rotate(-3deg);">
+                    <strong>TIMELINE:</strong><br><br>
+                    2005: Investigation starts<br>
+                    2006: FBI involved<br>
+                    2008: Sweetheart deal<br>
+                    2019: Re-arrested<br>
+                    2019: "Suicide" 💀
+                </div>
+
+                <div class="board-item sticky-note pink" style="left: 560px; top: 385px; transform: rotate(5deg);">
+                    <strong>KEY PLAYERS:</strong><br><br>
+                    • Ghislaine Maxwell ✓<br>
+                    • Jean-Luc Brunel 💀<br>
+                    • Sarah Kellen<br>
+                    • Nadia Marcinkova
+                </div>
+
+                <div class="board-item sticky-note green" style="left: 800px; top: 395px; transform: rotate(-4deg);">
+                    <strong>PROPERTIES:</strong><br><br>
+                    • NYC Mansion<br>
+                    • Palm Beach Estate<br>
+                    • NM Zorro Ranch<br>
+                    • Paris Apartment<br>
+                    • Little St. James
+                </div>
+
+                <div class="board-item sticky-note blue" style="left: 1040px; top: 370px; transform: rotate(3deg);">
+                    <strong>BRUNEL:</strong><br><br>
+                    Found dead in cell<br>
+                    Feb 2022, Paris<br>
+                    "Suicide" 🤔<br>
+                    Day before testimony
+                </div>
+
+                <!-- Row 3 -->
+                <div class="board-item sticky-note" style="left: 100px; top: 600px; transform: rotate(-5deg);">
+                    <strong>MCC FAILURES:</strong><br><br>
+                    • Understaffed<br>
+                    • Camera blind spots<br>
+                    • No checks for 8 hrs<br>
+                    • "Perfect storm" 🙄
+                </div>
+
+                <div class="board-item sticky-note purple" style="left: 340px; top: 620px; transform: rotate(2deg);">
+                    <strong>VICTIMS:</strong><br><br>
+                    • 100+ identified<br>
+                    • Global recruitment<br>
+                    • As young as 14<br>
+                    • Many still unnamed
+                </div>
+
+                <div class="board-item sticky-note pink" style="left: 580px; top: 595px; transform: rotate(-3deg);">
+                    <strong>DOCUMENTS:</strong><br><br>
+                    3M+ pages released<br>
+                    2,000+ videos<br>
+                    180,000+ images<br>
+                    Still more redacted...
+                </div>
+
+                <div class="board-item sticky-note green" style="left: 820px; top: 610px; transform: rotate(4deg);">
+                    <strong>SEARCH TIP:</strong><br><br>
+                    CTRL+F "redacted" in any document. Count them.<br>
+                    You're welcome.
+                </div>
+
+                <div class="board-item sticky-note" style="left: 1060px; top: 590px; transform: rotate(-2deg);">
+                    <strong>REMEMBER:</strong><br><br>
+                    No client list exists (DOJ)<br>
+                    But somehow everyone knows who flew there 🤔
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- Pepe -->
+    <div class="pepe-corner">
+        <div class="pepe" onclick="newQuote()">
+            🔍
+            <div class="pepe-speech" id="pepeSpeech">
+                The cameras malfunctioned. All of them. At the same time. 🐸
+            </div>
+        </div>
+    </div>
+
+    <!-- Achievement -->
+    <div class="achievement" id="achievement">
+        <div class="achievement-icon" id="achieveIcon">🏆</div>
+        <div class="achievement-text">
+            <h4>Achievement Unlocked</h4>
+            <p id="achieveText">Investigation Started</p>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-meme">EPSTEIN DIDN'T KILL HIMSELF</div>
+        <p>All links direct to official U.S. Government sources</p>
+        <p class="disclaimer">
+            This is a satirical aggregator linking to publicly available government documents. 
+            We don't host any files. Stay skeptical, verify sources, and remember that being in 
+            someone's contact book doesn't make you guilty of anything. That said... 👀
+        </p>
+    </footer>
+
+    <script>
+        // ==================== COPY CA ====================
+        function copyCA() {
+            const ca = document.getElementById('caAddress').textContent;
+            if (ca && ca !== 'TBA') {
+                navigator.clipboard.writeText(ca);
+                showAchievement('📋', 'CA Copied!');
+            }
+        }
+
+        // ==================== TAB NAVIGATION ====================
+        document.querySelectorAll('.nav-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+                
+                // Initialize maps when tabs are shown
+                if (tab.dataset.tab === 'island') setTimeout(initIslandMap, 100);
+                if (tab.dataset.tab === 'flights') setTimeout(initFlightMap, 100);
+            });
+        });
+
+        // ==================== DAYS COUNTER ====================
+        const deathDate = new Date('2019-08-10');
+        const today = new Date();
+        document.getElementById('daysSince').textContent = Math.floor((today - deathDate) / (1000 * 60 * 60 * 24));
+
+        // ==================== ISLAND MAP (LEAFLET) ====================
+        let islandMap;
+        const islandCenter = [18.3000, -64.8256]; // Little St. James coordinates
+
+        const locations = {
+            temple: { coords: [18.3008, -64.8245], title: '🛕 The Temple', desc: 'Blue & white striped structure with gold dome. Lock on outside of door.' },
+            mansion: { coords: [18.2995, -64.8265], title: '🏛️ Main Residence', desc: 'Primary residential building with multiple floors.' },
+            pool: { coords: [18.2998, -64.8250], title: '🏊 Pool Complex', desc: 'Swimming pool visible in aerial footage.' },
+            helipad: { coords: [18.3012, -64.8235], title: '🚁 Helipad', desc: 'Private helipad for arrivals and departures.' },
+            dock: { coords: [18.2975, -64.8280], title: '⚓ Boat Dock', desc: 'Main dock for boat arrivals from St. Thomas.' },
+            guest: { coords: [18.2988, -64.8275], title: '🏠 Guest Villas', desc: 'Smaller structures for guests and staff.' },
+            sundial: { coords: [18.3002, -64.8258], title: '☀️ Sundial', desc: 'Large sundial structure visible in aerial photos.' }
+        };
+
+        function initIslandMap() {
+            if (islandMap) return;
+            
+            islandMap = L.map('islandMap', {
+                center: islandCenter,
+                zoom: 17,
+                maxZoom: 19
+            });
+
+            // ESRI World Imagery (satellite)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: 'Tiles © Esri',
+                maxZoom: 19
+            }).addTo(islandMap);
+
+            // Add markers
+            Object.entries(locations).forEach(([key, loc]) => {
+                const markerClass = `custom-marker ${key}`;
+                const icon = L.divIcon({
+                    className: markerClass,
+                    html: loc.title.split(' ')[0],
+                    iconSize: [32, 32],
+                    iconAnchor: [16, 16]
+                });
+
+                const marker = L.marker(loc.coords, { icon }).addTo(islandMap);
+                marker.bindPopup(`
+                    <div class="popup-title">${loc.title}</div>
+                    <div class="popup-desc">${loc.desc}</div>
+                `);
+            });
+        }
+
+        // Location list click handlers
+        document.querySelectorAll('.location-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const loc = item.dataset.loc;
+                if (islandMap && locations[loc]) {
+                    islandMap.setView(locations[loc].coords, 18);
+                }
+            });
+        });
+
+        // Initialize on load
+        setTimeout(initIslandMap, 500);
+
+        // ==================== FLIGHT MAP ====================
+        let flightMap;
+        
+        const flightLocations = [
+            { name: 'New York (TEB)', coords: [40.8501, -74.0608] },
+            { name: 'Palm Beach (PBI)', coords: [26.6832, -80.0956] },
+            { name: 'St. Thomas (STT)', coords: [18.3373, -64.9733] },
+            { name: 'Little St. James', coords: [18.3000, -64.8256], island: true },
+            { name: 'Santa Fe (SAF)', coords: [35.6171, -106.0889] },
+            { name: 'Paris (CDG)', coords: [49.0097, 2.5479] },
+            { name: 'Columbus (CMH)', coords: [39.9980, -82.8919] }
+        ];
+
+        const flightRoutes = [
+            [[40.8501, -74.0608], [18.3373, -64.9733]], // NYC to St. Thomas
+            [[26.6832, -80.0956], [18.3373, -64.9733]], // Palm Beach to St. Thomas
+            [[40.8501, -74.0608], [35.6171, -106.0889]], // NYC to Santa Fe
+            [[40.8501, -74.0608], [49.0097, 2.5479]], // NYC to Paris
+            [[40.8501, -74.0608], [39.9980, -82.8919]], // NYC to Columbus
+        ];
+
+        function initFlightMap() {
+            if (flightMap) return;
+            
+            flightMap = L.map('flightMap', {
+                center: [30, -40],
+                zoom: 3,
+                minZoom: 2
+            });
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '© OpenStreetMap, © CARTO'
+            }).addTo(flightMap);
+
+            // Add location markers
+            flightLocations.forEach(loc => {
+                const color = loc.island ? '#FF0040' : '#FFD700';
+                const marker = L.circleMarker(loc.coords, {
+                    radius: loc.island ? 10 : 6,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 2,
+                    fillOpacity: 0.9
+                }).addTo(flightMap);
+                
+                marker.bindTooltip(loc.name, { permanent: false, direction: 'top' });
+            });
+
+            // Add flight routes
+            flightRoutes.forEach(route => {
+                L.polyline(route, {
+                    color: '#FF0040',
+                    weight: 2,
+                    opacity: 0.6,
+                    dashArray: '10, 5'
+                }).addTo(flightMap);
+            });
+        }
+
+        // ==================== NAME FREQUENCY ====================
+        const nameData = [
+            { name: 'Jeffrey Epstein', count: 125000 },
+            { name: 'Ghislaine Maxwell', count: 89000 },
+            { name: 'Jane Doe (Various)', count: 45000 },
+            { name: 'Sarah Kellen', count: 32000 },
+            { name: 'Nadia Marcinkova', count: 28500 },
+            { name: 'Jean-Luc Brunel', count: 24000 },
+            { name: 'Les Wexner', count: 21000 },
+            { name: 'Virginia Giuffre', count: 19500 },
+            { name: 'Alfredo Rodriguez', count: 18000 },
+            { name: 'Juan Alessi', count: 16500 },
+            { name: 'Lesley Groff', count: 15000 },
+            { name: 'Adriana Ross', count: 14200 },
+            { name: 'Haley Robson', count: 13500 },
+            { name: 'Courtney Wild', count: 12800 },
+            { name: 'FBI Special Agents', count: 11500 },
+            { name: 'SDNY Prosecutors', count: 10800 },
+            { name: 'Alexander Acosta', count: 9500 },
+            { name: 'Palm Beach PD', count: 8900 },
+            { name: 'Maria Farmer', count: 8200 },
+            { name: 'Annie Farmer', count: 7800 },
+            { name: 'Emmy Tayler', count: 7200 },
+            { name: 'Cimberly Espinosa', count: 6800 },
+            { name: 'Johanna Sjoberg', count: 6500 },
+            { name: 'Tony Figueroa', count: 6100 },
+            { name: 'Igor Zinoviev', count: 5800 },
+            { name: 'Michael Reiter', count: 5500 },
+            { name: 'Mark Epstein', count: 5200 },
+            { name: 'Darren Indyke', count: 4900 },
+            { name: 'Richard Kahn', count: 4600 },
+            { name: 'Larry Visoski', count: 4300 },
+            { name: 'David Rodgers', count: 4000 },
+            { name: 'Maritza Vazquez', count: 3800 },
+            { name: 'Janusz Banasiak', count: 3500 },
+            { name: 'Shannon Salzman', count: 3200 },
+            { name: 'Rinaldo Rizzo', count: 3000 },
+        ];
+
+        // Generate heat map
+        const heatGrid = document.getElementById('heatGrid');
+        for (let i = 0; i < 100; i++) {
+            const cell = document.createElement('div');
+            cell.className = 'heat-cell';
+            const intensity = Math.random();
+            cell.style.background = `rgb(${Math.floor(255 * intensity)}, ${Math.floor(30 * (1-intensity))}, ${Math.floor(50 * (1-intensity))})`;
+            const randomName = nameData[Math.floor(Math.random() * nameData.length)];
+            cell.dataset.name = `${randomName.name}: ~${Math.floor(randomName.count * (0.5 + Math.random())).toLocaleString()}`;
+            heatGrid.appendChild(cell);
+        }
+
+        // Generate leaderboard
+        const leaderboard = document.getElementById('leaderboard');
+        const maxCount = nameData[0].count;
+        nameData.slice(0, 15).forEach((item, i) => {
+            const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+            leaderboard.innerHTML += `
+                <div class="leaderboard-item">
+                    <div class="lb-rank ${rankClass}">${i + 1}</div>
+                    <div class="lb-name">${item.name}</div>
+                    <div class="lb-bar"><div class="lb-bar-fill" style="width: ${(item.count / maxCount) * 100}%"></div></div>
+                    <div class="lb-count">${item.count.toLocaleString()}</div>
+                </div>
+            `;
+        });
+
+        // ==================== DOCUMENT ROULETTE ====================
+        const docLinks = [
+            'https://www.justice.gov/epstein/court-records',
+            'https://www.justice.gov/epstein/doj-disclosures',
+            'https://www.justice.gov/epstein/foia',
+            'https://vault.fbi.gov/jeffrey-epstein'
+        ];
+
+        function spinRoulette() {
+            const btn = document.getElementById('rouletteBtn');
+            btn.classList.add('spinning');
+            btn.innerHTML = '<span>🎰</span> Spinning... <span>🎰</span>';
+            
+            setTimeout(() => {
+                window.open(docLinks[Math.floor(Math.random() * docLinks.length)], '_blank');
+                btn.classList.remove('spinning');
+                btn.innerHTML = '<span>🎲</span> Random Document <span>🎲</span>';
+                showAchievement('🎰', 'Feeling Lucky');
+            }, 1200);
+        }
+
+        function searchDOJ() {
+            const q = document.getElementById('searchInput').value;
+            if (q.trim()) window.open(`https://www.justice.gov/epstein?keys=${encodeURIComponent(q)}`, '_blank');
+        }
+
+        document.getElementById('searchInput').addEventListener('keypress', e => {
+            if (e.key === 'Enter') searchDOJ();
+        });
+
+        // ==================== DOCUMENT BROWSER ====================
+        const docTypes = [
+            { type: 'deposition', icon: '📝', prefix: 'DEP' },
+            { type: 'fbi', icon: '🔍', prefix: 'FBI' },
+            { type: 'flight', icon: '✈️', prefix: 'FLT' },
+            { type: 'financial', icon: '💰', prefix: 'FIN' },
+            { type: 'communication', icon: '📧', prefix: 'COM' },
+            { type: 'photo', icon: '📸', prefix: 'IMG' },
+            { type: 'court', icon: '⚖️', prefix: 'CRT' },
+        ];
+
+        const docTitles = [
+            'Deposition of [REDACTED] - Palm Beach Investigation',
+            'FBI Interview Summary - Witness Statement',
+            'Flight Manifest N908JE - [DATE REDACTED]',
+            'Financial Transaction Records - Deutsche Bank',
+            'Email Correspondence - Subject: Travel Arrangements',
+            'Photograph Evidence - Little St. James Property',
+            'Court Filing - Motion to Seal Documents',
+            'Grand Jury Testimony Transcript - Sealed',
+            'Phone Records Analysis - [REDACTED] Communications',
+            'Property Records - Manhattan Residence',
+            'Bank Statement Summary - JPMorgan Chase Account',
+            'Travel Itinerary - International Flights [REDACTED]',
+            'Victim Impact Statement - Jane Doe #[NUMBER]',
+            'Police Report - Palm Beach County Sheriff',
+            'Immigration Records - USVI Entry/Exit Logs',
+            'Corporate Documents - [REDACTED] Foundation',
+            'Medical Records Request - Autopsy Report',
+            'Surveillance Log - MCC New York',
+            'Staff Employment Records - [REDACTED]',
+            'Asset Forfeiture Documentation',
+            'Plea Agreement Draft - 2008 Negotiations',
+            'Witness Protection Request - [SEALED]',
+            'Intelligence Briefing - [HEAVILY REDACTED]',
+            'Diplomatic Correspondence - [COUNTRY REDACTED]',
+            'Real Estate Transaction - Zorro Ranch NM',
+        ];
+
+        const statuses = ['unredacted', 'partial', 'heavy'];
+        const years = ['2024', '2023', '2022', '2019', '2018', '2015', '2012', '2008', '2006', '2005', '2003', '2001', '1999'];
+
+        function generateDocRow() {
+            const docType = docTypes[Math.floor(Math.random() * docTypes.length)];
+            const title = docTitles[Math.floor(Math.random() * docTitles.length)]
+                .replace('[NUMBER]', Math.floor(Math.random() * 150) + 1)
+                .replace('[DATE REDACTED]', years[Math.floor(Math.random() * years.length)]);
+            const status = statuses[Math.floor(Math.random() * statuses.length)];
+            const year = years[Math.floor(Math.random() * years.length)];
+            const pages = Math.floor(Math.random() * 500) + 1;
+            const docId = `${docType.prefix}-${year}-${String(Math.floor(Math.random() * 99999)).padStart(5, '0')}`;
+            
+            return `
+                <div class="doc-row" onclick="window.open('https://www.justice.gov/epstein', '_blank')">
+                    <div class="doc-row-icon">${docType.icon}</div>
+                    <div class="doc-row-info">
+                        <div class="doc-row-title">${title}</div>
+                        <div class="doc-row-meta">
+                            <span>${docId}</span>
+                            <span>${year}</span>
+                            <span>${pages} pages</span>
+                        </div>
+                    </div>
+                    <span class="doc-row-badge ${status}">${status === 'heavy' ? 'Heavily Redacted' : status === 'partial' ? 'Partial Redaction' : 'Unredacted'}</span>
+                    <span class="doc-row-size">${(pages * 0.1).toFixed(1)} MB</span>
+                </div>
+            `;
+        }
+
+        function loadDocs(count = 100) {
+            const browser = document.getElementById('docBrowser');
+            for (let i = 0; i < count; i++) {
+                browser.innerHTML += generateDocRow();
+            }
+        }
+
+        function loadMoreDocs() {
+            loadDocs(50);
+            showAchievement('📄', 'Deep Dive');
+        }
+
+        // Initialize documents
+        loadDocs(100);
+
+        // ==================== LIVE TICKER ====================
+        const tickerFiles = [
+            'DEP-2019-04521.pdf indexed',
+            'FBI-2008-00142.pdf processed', 
+            'FLT-2003-08891.pdf uploaded',
+            'IMG-2015-12003.jpg scanned',
+            'CRT-2019-00089.pdf released',
+            'COM-2007-45521.msg decrypted',
+            'FIN-2012-00234.xlsx parsed',
+            'DEP-2006-11234.pdf OCR complete',
+            'FBI-2019-00567.pdf declassified',
+            'FLT-2001-03344.pdf verified',
+            'CRT-2024-00012.pdf unsealed',
+            'IMG-2008-08834.jpg enhanced',
+            'DEP-2005-09921.pdf transcribed',
+            'COM-2004-33421.eml archived',
+            'FIN-2009-00891.pdf audited',
+        ];
+
+        const tickerActions = ['📄', '🔓', '✅', '🔍', '📁', '🗂️'];
+
+        function generateTickerContent() {
+            const ticker = document.getElementById('tickerContent');
+            let content = '';
+            
+            // Generate enough items to fill and scroll
+            for (let i = 0; i < 30; i++) {
+                const file = tickerFiles[Math.floor(Math.random() * tickerFiles.length)];
+                const action = tickerActions[Math.floor(Math.random() * tickerActions.length)];
+                const minutes = Math.floor(Math.random() * 59) + 1;
+                
+                content += `
+                    <div class="ticker-item">
+                        <span class="file-icon">${action}</span>
+                        <span class="file-name">${file}</span>
+                        <span class="file-time">${minutes}m ago</span>
+                    </div>
+                `;
+            }
+            
+            // Duplicate for seamless loop
+            ticker.innerHTML = content + content;
+        }
+
+        generateTickerContent();
+
+        // Refresh ticker periodically
+        setInterval(() => {
+            generateTickerContent();
+        }, 60000);
+
+        // ==================== CORK BOARD ====================
+        let drawMode = false;
+        let isDrawing = false;
+        let startX, startY;
+        const canvas = document.getElementById('stringCanvas');
+        const ctx = canvas.getContext('2d');
+        let strings = [];
+
+        function resizeCanvas() {
+            const board = document.getElementById('corkBoard');
+            canvas.width = board.offsetWidth;
+            canvas.height = board.offsetHeight;
+            redraw();
+        }
+
+        function toggleDraw() {
+            drawMode = !drawMode;
+            document.getElementById('drawBtn').classList.toggle('active', drawMode);
+            document.getElementById('drawBtn').textContent = drawMode ? '✋ Stop' : '🧵 Draw Strings';
+            canvas.classList.toggle('drawing', drawMode);
+        }
+
+        function clearStrings() {
+            strings = [];
+            redraw();
+        }
+
+        function redraw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = '#8B0000';
+            ctx.lineWidth = 2;
+            strings.forEach(s => {
+                ctx.beginPath();
+                ctx.moveTo(s.x1, s.y1);
+                ctx.lineTo(s.x2, s.y2);
+                ctx.stroke();
+            });
+        }
+
+        canvas.addEventListener('mousedown', e => {
+            if (!drawMode) return;
+            isDrawing = true;
+            const rect = canvas.getBoundingClientRect();
+            startX = e.clientX - rect.left;
+            startY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('mousemove', e => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            redraw();
+            ctx.beginPath();
+            ctx.moveTo(startX, startY);
+            ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            ctx.stroke();
+        });
+
+        canvas.addEventListener('mouseup', e => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            strings.push({ x1: startX, y1: startY, x2: e.clientX - rect.left, y2: e.clientY - rect.top });
+            isDrawing = false;
+            redraw();
+        });
+
+        // Draggable items
+        let activeItem = null, offsetX, offsetY;
+
+        document.querySelectorAll('.board-item').forEach(item => {
+            item.addEventListener('mousedown', e => {
+                if (drawMode) return;
+                activeItem = item;
+                const rect = item.getBoundingClientRect();
+                offsetX = e.clientX - rect.left;
+                offsetY = e.clientY - rect.top;
+                item.classList.add('dragging');
+            });
+        });
+
+        document.addEventListener('mousemove', e => {
+            if (!activeItem) return;
+            const board = document.getElementById('corkBoard');
+            const rect = board.getBoundingClientRect();
+            activeItem.style.left = (e.clientX - rect.left - offsetX) + 'px';
+            activeItem.style.top = (e.clientY - rect.top - offsetY) + 'px';
+            activeItem.style.transform = 'rotate(0deg)';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (activeItem) {
+                activeItem.classList.remove('dragging');
+                activeItem = null;
+            }
+        });
+
+        window.addEventListener('resize', resizeCanvas);
+        setTimeout(resizeCanvas, 100);
+
+        // ==================== PEPE QUOTES ====================
+        const quotes = [
+            "The cameras malfunctioned. All of them. At the same time. 🐸",
+            "I'm not saying it was a conspiracy, but... 🤔",
+            "Follow the flight logs, anon.",
+            "Why did the guards fall asleep? Asking for a friend.",
+            "Bill Barr said it was suicide. Case closed! ...right?",
+            "His cell mate was moved out the day before.",
+            "The autopsy showed injuries more consistent with strangulation...",
+            "CTRL+F 'redacted' in any document. You're welcome.",
+            "The sweetheart deal in 2008 though... 👀",
+            "Name a more competent suicide. I'll wait."
+        ];
+
+        function newQuote() {
+            document.getElementById('pepeSpeech').textContent = quotes[Math.floor(Math.random() * quotes.length)];
+        }
+
+        // ==================== ACHIEVEMENTS ====================
+        function showAchievement(icon, text) {
+            document.getElementById('achieveIcon').textContent = icon;
+            document.getElementById('achieveText').textContent = text;
+            document.getElementById('achievement').classList.add('show');
+            setTimeout(() => document.getElementById('achievement').classList.remove('show'), 3000);
+        }
+
+        setTimeout(() => showAchievement('🔍', 'Investigation Started'), 2000);
+    </script>
+</body>
+</html>
